@@ -20,4 +20,4 @@ inputs:
 
 runs:
   using: docker
-  image: docker://ghcr.io/ahmadnassri/action-workflow-queue@sha256:35e3262089d67eeddfd965a6d921b73b6526a53b045ce22243a404fe56251eed # 1.1.4
+  image: docker://ghcr.io/ahmadnassri/action-workflow-queue:1.1.4@sha256:35e3262089d67eeddfd965a6d921b73b6526a53b045ce22243a404fe56251eed
