@@ -1,0 +1,200 @@
+# ---------------------------------------------------- #
+# Note: this file originates in template-action-docker #
+# ---------------------------------------------------- #
+
+on:
+  - push
+  - workflow_dispatch
+
+name: push
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+
+permissions:
+  contents: read
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+
+    outputs:
+      image-name: ${{ steps.image.outputs.name }}
+      repository_is_template: ${{ steps.metadata.outputs.repository_is_template }}
+      repository_default_branch: ${{ steps.metadata.outputs.repository_default_branch }}
+
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+
+      - id: metadata
+        uses: ahmadnassri/action-metadata@c292173f9b88cf71f2dddff1fea0a3c524f5713d # v2.1.2
+
+      - id: image
+        run: echo "name=$(basename "${GITHUB_REPOSITORY/docker-//}")" >> "$GITHUB_OUTPUT"
+
+  commit-lint:
+    timeout-minutes: 5
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+
+      - uses: ahmadnassri/action-commit-lint@33a0f3df618e62083ef71b449f9abca6deb0bbea # v2.1.9
+        with:
+          config: .github/linters/.commit-lint.yml
+
+  mega-linter:
+    timeout-minutes: 5
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+
+      - uses: oxsecurity/megalinter/flavors/javascript@0d014ffdef3307ca4a4cd1ddf482fc4f05733d7c # v7.0.4
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MEGALINTER_CONFIG: .github/linters/.mega-linter.yml
+          GITHUB_COMMENT_REPORTER: true
+          GITHUB_STATUS_REPORTER: true
+
+      - uses: actions/upload-artifact@ff15f0306b3f739f7b6fd43fb5d26cd321bd4de5 # v3
+        if: ${{ success() }} || ${{ failure() }}
+        with:
+          name: mega-linter-reports
+          path: |
+            megalinter-reports
+            mega-linter.log
+
+  release:
+    needs:
+      - metadata
+      - commit-lint
+      - mega-linter
+
+    # only runs on main branch for non template repos
+    if: |
+      needs.metadata.outputs.repository_is_template == 'false' &&
+      needs.metadata.outputs.repository_default_branch == github.ref_name
+
+    timeout-minutes: 5
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      packages: write
+
+    outputs:
+      published: ${{ steps.release.outputs.published }}
+      version: ${{ steps.release.outputs.release-version }}
+      version-major: ${{ steps.release.outputs.release-version-major }}
+      version-minor: ${{ steps.release.outputs.release-version-minor }}
+
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        with:
+          submodules: true
+
+      - id: release
+        uses: ahmadnassri/action-semantic-release@b9ed9c1dbc5cd8e301c77b1126cc8d7a6c0b4bd6 # v2.2.3
+        with:
+          config: ${{ github.workspace }}/.semantic.json
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  publish-docker:
+    needs:
+      - release
+      - metadata
+
+    timeout-minutes: 5
+
+    if: ${{ needs.release.outputs.published == 'true' }}
+
+    name: publish to ghcr.io
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: docker/setup-qemu-action@2b82ce82d56a2a04d2637cd93a637ae1b359c0a7 # v2
+      - uses: docker/setup-buildx-action@885d1462b80bc1c1c7f0b00334ad271f09369c55 # v2
+
+      # login to registry
+      - uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc # v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+
+      # publish
+      - uses: docker/build-push-action@0a97817b6ade9f46837855d676c4cca3a2471fc9 # v4
+        with:
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ needs.metadata.outputs.image-name }}:latest
+            ghcr.io/${{ github.repository_owner }}/${{ needs.metadata.outputs.image-name }}:${{ needs.release.outputs.version-major }}
+            ghcr.io/${{ github.repository_owner }}/${{ needs.metadata.outputs.image-name }}:${{ needs.release.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=${{ needs.metadata.outputs.image-name }}
+            org.opencontainers.image.url=${{ github.event.repository.html_url }}
+            org.opencontainers.image.version=${{ needs.release.outputs.version }}
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  alias:
+    needs: release
+
+    if: ${{ needs.release.outputs.published == 'true' }}
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      packages: write
+
+    strategy:
+      matrix:
+        release: [ "v${{ needs.release.outputs.version }}" ]
+        alias:
+          - "v${{ needs.release.outputs.version-major }}"
+          - "v${{ needs.release.outputs.version-major }}.${{ needs.release.outputs.version-minor }}"
+
+    steps:
+      - uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
+        with:
+          script: |
+            const { data: { object: { sha } } } = await github.rest.git.getRef({ ...context.repo, ref: 'tags/${{ matrix.release }}' })
+            await github.rest.git.deleteRef({ ...context.repo, ref: 'tags/${{ matrix.alias }}' }).catch(() => {})
+            await github.rest.git.createRef({ ...context.repo, ref: 'refs/tags/${{ matrix.alias }}', sha })
+
+  template-sync:
+    timeout-minutes: 5
+
+    needs:
+      - metadata
+      - commit-lint
+      - mega-linter
+
+    # only runs on main branch for template repos
+    if: |
+      needs.metadata.outputs.repository_is_template == 'true' &&
+      needs.metadata.outputs.repository_default_branch == github.ref_name
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+
+      - uses: ahmadnassri/action-template-repository-sync@a6390c03b5816dc754f6645ec0f6bd032fdd496b # v2.3.4
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
