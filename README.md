@@ -8,7 +8,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
-| v1.1.2 | [`v1.1.2`](https://github.com/chainguard-actions/ahmadnassri-action-workflow-queue/tree/v1.1.2) | — |
+| v1.1.2 | [`v1.1.2`](https://github.com/chainguard-actions/ahmadnassri-action-workflow-queue/tree/v1.1.2) | [`b659ad8`](https://github.com/ahmadnassri/action-workflow-queue/commit/b659ad8a8d565fe5642eb6d7c57c4469862e088a) |
 | v1.1.3 | [`v1.1.3`](https://github.com/chainguard-actions/ahmadnassri-action-workflow-queue/tree/v1.1.3) | — |
 | v1.1.4 | [`v1.1.4`](https://github.com/chainguard-actions/ahmadnassri-action-workflow-queue/tree/v1.1.4) | [`ad58635`](https://github.com/ahmadnassri/action-workflow-queue/commit/ad58635434e60899579db8d0dce15cf233c7d395) |
 
