@@ -1,0 +1,77 @@
+# ----------------------------------------------- #
+# Note: this file originates in template-template #
+# ----------------------------------------------- #
+
+on: pull_request_target
+
+name: pull_request_target
+
+permissions:
+  pull-requests: write
+  contents: write
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+
+    outputs:
+      repository_is_template: ${{ steps.metadata.outputs.repository_is_template }}
+
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+
+      - uses: ahmadnassri/action-metadata@c292173f9b88cf71f2dddff1fea0a3c524f5713d # v2.1.2
+        id: metadata
+
+  auto-merge:
+    timeout-minutes: 5
+
+    runs-on: ubuntu-latest
+
+    # only run for dependabot PRs
+    if: ${{ github.actor == 'dependabot[bot]' }}
+
+    steps:
+      - id: dependabot
+        uses: dependabot/fetch-metadata@cd6e996708b8cfe0b639401134a3b9a3177be7b2 # v1.5.1
+        with:
+          github-token: ${{ github.token }}
+
+      - name: auto merge conditions
+        id: auto-merge
+        if: |
+          contains('version-update:semver-minor,version-update:semver-patch', steps.dependabot.outputs.update-type) &&
+          contains('direct:development,indirect:development,direct:production,indirect:production', steps.dependabot.outputs.dependency-type)
+
+        run: echo "::notice ::auto-merge conditions satisfied"
+
+      - name: auto approve pr
+        if: ${{ steps.auto-merge.conclusion == 'success' }}
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --rebase "$PR_URL"
+
+  template-sync:
+    needs: metadata
+
+    timeout-minutes: 20
+
+    runs-on: ubuntu-latest
+
+    # only run for templates
+    if: ${{ needs.metadata.outputs.repository_is_template == 'true' }}
+
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - uses: ahmadnassri/action-template-repository-sync@a6390c03b5816dc754f6645ec0f6bd032fdd496b # v2.3.4
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
