@@ -1,16 +1,54 @@
-# ahmadnassri/action-workflow-queue
+# GitHub Action: Workflow Run Queue
 
 If the same workflow is already running from a previous commit, wait for it to finish
 
-Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at [https://github.com/ahmadnassri/action-workflow-queue](https://github.com/ahmadnassri/action-workflow-queue).
+[![license][license-img]][license-url]
+[![release][release-img]][release-url]
 
-## Versions
+<details>
+  <summary><strong>Why?</strong></summary>
 
-| Version | Tag | Upstream commit |
-|---------|-----|-----------------|
-| v1.1.2 | [`v1.1.2`](https://github.com/chainguard-actions/ahmadnassri-action-workflow-queue/tree/v1.1.2) | [`b659ad8`](https://github.com/ahmadnassri/action-workflow-queue/commit/b659ad8a8d565fe5642eb6d7c57c4469862e088a) |
-| v1.1.3 | [`v1.1.3`](https://github.com/chainguard-actions/ahmadnassri-action-workflow-queue/tree/v1.1.3) | [`e616de6`](https://github.com/ahmadnassri/action-workflow-queue/commit/e616de6d6f25e94e7023d173760e4f10c34219ef) |
-| v1.1.4 | [`v1.1.4`](https://github.com/chainguard-actions/ahmadnassri-action-workflow-queue/tree/v1.1.4) | [`ad58635`](https://github.com/ahmadnassri/action-workflow-queue/commit/ad58635434e60899579db8d0dce15cf233c7d395) |
+Workflows run on every commit asynchronously, this is fine for most cases, however, you might want to wait for a previous commit workflow to finish before running another one, some example use-cases:
+
+- Deployment workflows
+- Terraform workflows
+- Database Migrations
+
+</details>
+
+## Usage
+
+###### `.github/workflows/my-workflow.yml`
+
+``` yaml
+jobs:
+  xyz:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ahmadnassri/action-workflow-queue@v1
+
+      # only runs additional steps if there is no other instance of `my-workflow.yml` currently running
+```
+
+### Inputs
+
+| input          | required | default        | description                                     |
+|----------------|----------|----------------|-------------------------------------------------|
+| `github-token` | ❌       | `github.token` | The GitHub token used to call the GitHub API    |
+| `timeout`      | ❌       | `600000`       | timeout before we stop trying (in milliseconds) |
+| `delay`        | ❌       | `10000`        | delay between status checks (in milliseconds)   |
+
+----
+> Author: [Ahmad Nassri](https://www.ahmadnassri.com/) &bull;
+> Twitter: [@AhmadNassri](https://twitter.com/AhmadNassri)
+
+[license-url]: LICENSE
+[license-img]: https://badgen.net/github/license/ahmadnassri/action-workflow-queue
+
+[release-url]: https://github.com/ahmadnassri/action-workflow-queue/releases
+[release-img]: https://badgen.net/github/release/ahmadnassri/action-workflow-queue
 
 ## Privacy
 
